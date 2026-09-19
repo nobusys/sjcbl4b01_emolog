@@ -525,11 +525,24 @@
 
         // データ集計
         function processChartData() {
-            // メモリ上で日付フィルタリング (スプレッドシートの自動日付変換対策を含む)
+            // メモリ上で日付フィルタリング
             const targetData = allEmotionsData.filter(d => {
                 if (!d || !d.date) return false;
-                // "2026-09-19T15:00:00.000Z" のような形式で返ってきても、先頭10文字で判定できるようにする
-                const recordDateStr = String(d.date).substring(0, 10);
+                
+                // ★修正: スプレッドシート側の自動日付変換(タイムゾーンのズレ)を吸収する処理
+                let recordDateStr = String(d.date);
+                if (recordDateStr.includes('T')) {
+                    // "2026-09-19T15:00:00.000Z" のような形式を日本時間に直す
+                    const dateObj = new Date(recordDateStr);
+                    if (!isNaN(dateObj)) {
+                        const offset = 9 * 60; // JST
+                        const jstDate = new Date(dateObj.getTime() + (dateObj.getTimezoneOffset() + offset) * 60000);
+                        recordDateStr = `${jstDate.getFullYear()}-${String(jstDate.getMonth() + 1).padStart(2, '0')}-${String(jstDate.getDate()).padStart(2, '0')}`;
+                    }
+                } else {
+                    recordDateStr = recordDateStr.substring(0, 10);
+                }
+                
                 return recordDateStr === selectedDate;
             });
             
@@ -592,6 +605,10 @@
             
             pieChartInstance.update();
             barChartInstance.update();
+            
+            // ★修正: タブ切り替え時にグラフが真っ白になる現象を防ぐため、リサイズを強制
+            pieChartInstance.resize();
+            barChartInstance.resize();
         }
 
         // アプリケーション起動
