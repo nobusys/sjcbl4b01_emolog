@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>エモログ - 今のキモチを記録しよう</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <style>
+        body {
+            font-family: 'Noto Sans JP', sans-serif;
+            background-color: #f3f4f6;
+            -webkit-tap-highlight-color: transparent;
+            -ms-overflow-style: none; /* IE and Edge */
+            scrollbar-width: none; /* Firefox */
+        }
+        body::-webkit-scrollbar {
+            display: none;
+        }
+        /* セーフエリア対応 */
+        .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+        
+        /* スライダーのカスタマイズ */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]:focus {
+            outline: none;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 28px;
+            width: 28px;
+            border-radius: 50%;
+            background: #1f2937; /* gray-800 */
+            cursor: pointer;
+            margin-top: -10px; /* トラックの中央に配置 */
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            transition: transform 0.1s;
+        }
+        input[type=range]::-webkit-slider-thumb:active {
+            transform: scale(0.9);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 8px;
+            cursor: pointer;
+            background: #e5e7eb; /* gray-200 */
+            border-radius: 4px;
+        }
+        .hide { display: none !important; }
+    </style>
+</head>
+<body class="text-gray-800 antialiased h-[100dvh] w-full flex flex-col justify-center items-center sm:p-4">
+
+    <!-- アプリコンテナ: スマホでは全画面、PCではスマホサイズの中央配置 -->
+    <div class="w-full h-full max-w-md bg-[#fafafa] relative overflow-hidden flex flex-col sm:shadow-2xl sm:rounded-[2.5rem] sm:h-[calc(100vh-2rem)]">
+        
+        <!-- ヘッダー -->
+        <header class="bg-white shadow-sm z-10 relative flex-shrink-0 py-3 px-6 flex justify-between items-center rounded-b-2xl">
+            <h1 class="text-xl font-black text-gray-800 tracking-wider">
+                <i class="fa-solid fa-heart-pulse text-pink-500 mr-2"></i>エモログ
+            </h1>
+            <div id="status-indicator" class="text-xs font-bold text-gray-400 flex items-center">
+                <span class="w-2 h-2 rounded-full bg-gray-400 mr-1 block" id="connection-dot"></span>
+                <span id="connection-text">接続中...</span>
+            </div>
+        </header>
+
+        <!-- メインコンテンツ領域 (スクロール可能) -->
+        <main class="flex-1 overflow-y-auto relative w-full pb-28">
+            
+            <!-- ▼▼ 記録画面 (Record View) ▼▼ -->
+            <div id="view-record" class="p-4 flex flex-col min-h-full">
+                
+                <h2 class="text-lg font-bold text-gray-800 mb-1 ml-2">今のキモチはどれに近い？</h2>
+                <p class="text-xs text-gray-500 mb-4 ml-2">
+                    まずは色を選んで、そのあとに「強さ」を調節してね。
+                </p>
+                
+                <!-- カテゴリ選択ボタン (8種) -->
+                <div class="grid grid-cols-4 gap-2 mb-6" id="category-buttons">
+                    <!-- JSで動的に生成 -->
+                </div>
+
+                <!-- 選択中の感情のプレビュー & スライダー -->
+                <div id="preview-container" class="bg-white rounded-3xl p-5 shadow-sm border border-gray-100 mb-4 transition-all duration-300 opacity-50 pointer-events-none">
+                    
+                    <div id="preview-box" class="flex flex-col items-center justify-center p-4 rounded-2xl h-32 border-[3px] transition-all duration-300 border-gray-200 bg-gray-50 mb-8 relative overflow-hidden">
+                        <span id="preview-category-name" class="text-xs font-bold text-gray-400 mb-1 z-10">カテゴリを選択してね</span>
+                        <span id="preview-emotion-name" class="text-2xl font-extrabold text-gray-400 text-center z-10">------</span>
+                        <span id="preview-sub-name" class="text-xs font-bold text-gray-400 mt-2 z-10"></span>
+                        
+                        <!-- 背景アイコン -->
+                        <i id="preview-bg-icon" class="fa-solid fa-circle text-gray-200 text-6xl absolute -right-2 -bottom-4 opacity-30 z-0"></i>
+                    </div>
+
+                    <!-- スライダー -->
+                    <div class="px-2 pb-2">
+                        <input type="range" id="emotion-slider" min="1" max="3" step="1" value="2" class="w-full">
+                        <div class="flex justify-between text-xs font-bold text-gray-400 mt-3 px-1">
+                            <span>弱 (1)</span>
+                            <span>中 (2)</span>
+                            <span>強 (3)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 記録ボタン -->
+                <div class="mt-auto pt-4 transition-all duration-300 transform translate-y-4 opacity-0 pointer-events-none" id="submit-container">
+                    <button onclick="submitEmotion()" id="submit-btn" class="w-full py-4 bg-gray-900 text-white rounded-2xl font-bold shadow-xl hover:bg-gray-800 transition-all active:scale-95 flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-check"></i> このキモチを記録する
+                    </button>
+                </div>
+
+                <!-- 記録完了メッセージ -->
+                <div id="success-message" class="hide bg-green-50 text-green-700 border border-green-200 rounded-2xl p-4 text-center mt-4 shadow-sm">
+                    <i class="fa-solid fa-check-circle text-2xl mb-2"></i>
+                    <p class="font-bold">記録したよ！</p>
+                    <p class="text-xs mt-1 opacity-80">今日もえらい！みんなの記録も見てみよう。</p>
+                </div>
+
+                <!-- エラーメッセージ -->
+                <div id="error-message" class="hide bg-red-50 text-red-700 border border-red-200 rounded-2xl p-4 text-center mt-4 shadow-sm">
+                    <i class="fa-solid fa-triangle-exclamation text-2xl mb-2"></i>
+                    <p class="font-bold">エラーが発生しました</p>
+                    <p class="text-xs mt-1 opacity-80" id="error-text">もう一度試してね。</p>
+                </div>
+            </div>
+
+            <!-- ▼▼ 集計画面 (Dashboard View) ▼▼ -->
+            <div id="view-dashboard" class="p-4 hide">
+                <div class="mb-4 mt-2 flex justify-between items-end bg-white p-3 rounded-2xl shadow-sm border border-gray-100">
+                    <div>
+                        <h2 class="text-xl font-bold text-gray-800">みんなのキモチ</h2>
+                        <p class="text-[10px] text-gray-500 mt-1">日ごとの集計データ</p>
+                    </div>
+                    <!-- 日付選択カレンダー -->
+                    <input type="date" id="date-picker" class="border border-gray-200 rounded-lg p-2 text-sm text-gray-700 shadow-inner outline-none focus:border-pink-400 bg-gray-50 font-bold">
+                </div>
+
+                <!-- 円グラフ (8種類) -->
+                <div class="bg-white rounded-3xl p-5 shadow-sm border border-gray-100 mb-4">
+                    <h3 class="text-sm font-bold text-gray-600 mb-1 text-center">8つの基本感情の割合</h3>
+                    <p class="text-[10px] text-gray-400 text-center mb-4">グループの全体的なムードです</p>
+                    <div class="relative h-56 w-full flex justify-center items-center">
+                        <canvas id="pieChart"></canvas>
+                        <div id="no-data-msg" class="absolute inset-0 flex items-center justify-center text-gray-400 font-bold text-sm hide">
+                            まだ記録がありません
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 棒グラフ (24種類) -->
+                <div class="bg-white rounded-3xl p-5 shadow-sm border border-gray-100 mb-4">
+                    <h3 class="text-sm font-bold text-gray-600 mb-1 text-center">くわしい感情の内訳</h3>
+                    <p class="text-[10px] text-gray-400 text-center mb-4">どの強さの感情が多いかな？</p>
+                    <div class="relative h-72 w-full">
+                        <canvas id="barChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- ボトムナビゲーション -->
+        <nav class="bg-white border-t border-gray-100 absolute bottom-0 w-full z-20 pb-safe rounded-t-3xl shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+            <div class="flex justify-around items-center p-2">
+                <button onclick="switchView('record')" id="nav-record" class="flex flex-col items-center p-3 w-20 rounded-2xl transition-all text-gray-900 bg-gray-50">
+                    <i class="fa-solid fa-pen-to-square text-xl"></i>
+                    <span class="text-[10px] font-bold mt-1">記録する</span>
+                </button>
+                <button onclick="switchView('dashboard')" id="nav-dashboard" class="flex flex-col items-center p-3 w-20 rounded-2xl transition-all text-gray-400 hover:text-gray-600">
+                    <i class="fa-solid fa-chart-pie text-xl"></i>
+                    <span class="text-[10px] font-bold mt-1">集計を見る</span>
+                </button>
+            </div>
+        </nav>
+    </div>
+
+    <script type="module">
+        // ★手順8でコピーした「ウェブアプリのURL」に書き換えてください★
+        const GAS_URL = 'https://script.google.com/macros/s/AKfycbycO39o7SGsHlmOHHj8DamvgxkJqSKTb2vXz1LZKqUIMo62rzDOeHv8w_dfZ00TO7ki/exec';
+
+        /* STREAMING_CHUNK: Defining emotion data (8 Categories * 3 Levels) */
+        // プルチックの輪 ＋ Mood Meterにインスパイアされた、分かりやすい感情表現
+        const emotionCategories = [
+            { id: "ecstasy", name: "喜び", color: "#FBBF24", icon: "fa-sun", bgClass: "bg-yellow-100", borderClass: "border-yellow-300", textClass: "text-yellow-600" },
+            { id: "admiration", name: "信頼", color: "#34D399", icon: "fa-heart", bgClass: "bg-emerald-100", borderClass: "border-emerald-300", textClass: "text-emerald-600" },
+            { id: "terror", name: "恐れ", color: "#A3E635", icon: "fa-ghost", bgClass: "bg-lime-100", borderClass: "border-lime-300", textClass: "text-lime-600" },
+            { id: "amazement", name: "驚き", color: "#60A5FA", icon: "fa-bolt", bgClass: "bg-blue-100", borderClass: "border-blue-300", textClass: "text-blue-600" },
+            { id: "grief", name: "悲しみ", color: "#93C5FD", icon: "fa-cloud-rain", bgClass: "bg-sky-100", borderClass: "border-sky-300", textClass: "text-sky-600" },
+            { id: "loathing", name: "嫌悪", color: "#A78BFA", icon: "fa-face-frown-open", bgClass: "bg-purple-100", borderClass: "border-purple-300", textClass: "text-purple-600" },
+            { id: "rage", name: "怒り", color: "#F87171", icon: "fa-fire", bgClass: "bg-red-100", borderClass: "border-red-300", textClass: "text-red-600" },
+            { id: "vigilance", name: "期待", color: "#FB923C", icon: "fa-eye", bgClass: "bg-orange-100", borderClass: "border-orange-300", textClass: "text-orange-600" }
+        ];
+
+        // 各カテゴリの 弱(1) / 中(2) / 強(3) の表現
+        const emotionsMap = {
+            "ecstasy": {
+                3: { name: "歓喜", sub: "有頂天・大喜び・お祭り気分" },
+                2: { name: "喜び", sub: "幸せ・うれしい・楽しい" },
+                1: { name: "平穏", sub: "満足している・充実・穏やか" }
+            },
+            "admiration": {
+                3: { name: "敬愛", sub: "心から信頼・感動する" },
+                2: { name: "信頼", sub: "安心している・心強い" },
+                1: { name: "容認", sub: "受け入れる・寛容" }
+            },
+            "terror": {
+                3: { name: "恐怖", sub: "パニック・おびえる・恐ろしい" },
+                2: { name: "恐れ", sub: "怖い・心配する・危惧する" },
+                1: { name: "不安", sub: "気がかり・憂慮する" }
+            },
+            "amazement": {
+                3: { name: "驚嘆", sub: "衝撃的・あ然とする" },
+                2: { name: "驚き", sub: "ビックリ・うろたえる" },
+                1: { name: "動揺", sub: "そわそわする・気を引かれる" }
+            },
+            "grief": {
+                3: { name: "悲嘆", sub: "絶望・みじめ" },
+                2: { name: "悲しみ", sub: "悲痛・落ち込む・がっかりする" },
+                1: { name: "哀愁", sub: "気を落とす・センチメンタル" }
+            },
+            "loathing": {
+                3: { name: "強い嫌悪", sub: "嫌悪感を抱く・絶対ムリ" },
+                2: { name: "嫌悪", sub: "うんざりする・不快" },
+                1: { name: "退屈", sub: "つまらない・不満" }
+            },
+            "rage": {
+                3: { name: "激怒", sub: "激しい怒り・怒り爆発・許しがたい" },
+                2: { name: "怒り", sub: "腹立たしい・ムカつく・憤りを感じる" },
+                1: { name: "苛立ち", sub: "イライラする・もどかしい・気に障る" }
+            },
+            "vigilance": {
+                3: { name: "警戒", sub: "神経を尖らせる・張り詰めた・用心深い" },
+                2: { name: "期待", sub: "ワクワクする・待ち遠しい・前向き" },
+                1: { name: "関心", sub: "気になる・興味がある・惹きつけられる" }
+            }
+        };
+
+        let currentView = 'record';
+        let isSubmitting = false;
+        let selectedDate = getTodayString();
+        let allEmotionsData = [];
+        
+        let selectedCategory = null;
+        let selectedLevel = 2; // 初期値は「中(2)」
+
+        let pieChartInstance = null;
+        let barChartInstance = null;
+
+        // ヘルパー関数
+        function updateStatus(text, colorClass) {
+            const textEl = document.getElementById('connection-text');
+            const dotEl = document.getElementById('connection-dot');
+            if(textEl) textEl.innerText = text;
+            if(dotEl) dotEl.className = `w-2 h-2 rounded-full mr-1 block ${colorClass}`;
+        }
+
+        function getTodayString() {
+            const now = new Date();
+            const offset = 9 * 60; // JST補正
+            const jstNow = new Date(now.getTime() + (now.getTimezoneOffset() + offset) * 60000);
+            return `${jstNow.getFullYear()}-${String(jstNow.getMonth() + 1).padStart(2, '0')}-${String(jstNow.getDate()).padStart(2, '0')}`;
+        }
+
+        function showCustomError(msg) {
+            const errDiv = document.getElementById('error-message');
+            document.getElementById('error-text').innerText = msg;
+            errDiv.classList.remove('hide');
+            setTimeout(() => errDiv.classList.add('hide'), 4000);
+        }
+
+        // 画面切り替え
+        window.switchView = function(viewName) {
+            currentView = viewName;
+            document.getElementById('view-record').classList.toggle('hide', viewName !== 'record');
+            document.getElementById('view-dashboard').classList.toggle('hide', viewName !== 'dashboard');
+            
+            const navRecord = document.getElementById('nav-record');
+            const navDashboard = document.getElementById('nav-dashboard');
+            
+            if (viewName === 'record') {
+                navRecord.className = "flex flex-col items-center p-3 w-20 rounded-2xl transition-all text-gray-900 bg-gray-50";
+                navDashboard.className = "flex flex-col items-center p-3 w-20 rounded-2xl transition-all text-gray-400 hover:text-gray-600";
+                document.getElementById('success-message').classList.add('hide');
+                document.getElementById('error-message').classList.add('hide');
+            } else {
+                navDashboard.className = "flex flex-col items-center p-3 w-20 rounded-2xl transition-all text-gray-900 bg-gray-50";
+                navRecord.className = "flex flex-col items-center p-3 w-20 rounded-2xl transition-all text-gray-400 hover:text-gray-600";
+                window.dispatchEvent(new Event('resize')); // グラフサイズ再調整
+            }
+        };
+
+        // UI初期化
+        function initRecordUI() {
+            const container = document.getElementById('category-buttons');
+            
+            emotionCategories.forEach(cat => {
+                const btn = document.createElement('button');
+                btn.className = `flex flex-col items-center justify-center p-3 rounded-2xl border-2 border-transparent transition-all hover:bg-gray-50 active:scale-95`;
+                btn.id = `btn-cat-${cat.id}`;
+                
+                btn.innerHTML = `
+                    <div class="w-10 h-10 rounded-full flex items-center justify-center mb-1 shadow-sm ${cat.bgClass} ${cat.textClass}">
+                        <i class="fa-solid ${cat.icon} text-lg"></i>
+                    </div>
+                    <span class="text-[9px] font-bold text-gray-600 leading-tight text-center w-full">${cat.name}</span>
+                `;
+                
+                btn.onclick = () => selectCategory(cat);
+                container.appendChild(btn);
+            });
+
+            // スライダーイベント
+            const slider = document.getElementById('emotion-slider');
+            slider.addEventListener('input', (e) => {
+                selectedLevel = parseInt(e.target.value);
+                updatePreview();
+            });
+
+            // 日付ピッカー
+            const datePicker = document.getElementById('date-picker');
+            datePicker.value = selectedDate;
+            datePicker.max = getTodayString();
+            datePicker.addEventListener('change', (e) => {
+                selectedDate = e.target.value;
+                processChartData();
+            });
+        }
+
+        // カテゴリ選択処理
+        function selectCategory(category) {
+            selectedCategory = category;
+            selectedLevel = 2; // リセット
+            document.getElementById('emotion-slider').value = 2;
+            
+            emotionCategories.forEach(cat => {
+                const btn = document.getElementById(`btn-cat-${cat.id}`);
+                if (cat.id === category.id) {
+                    btn.classList.add('ring-2', 'ring-offset-1', 'ring-gray-300', 'bg-white', 'shadow-md');
+                } else {
+                    btn.classList.remove('ring-2', 'ring-offset-1', 'ring-gray-300', 'bg-white', 'shadow-md');
+                }
+            });
+
+            updatePreview();
+        }
+
+        // プレビューの更新
+        function updatePreview() {
+            if (!selectedCategory) return;
+
+            const previewContainer = document.getElementById('preview-container');
+            const submitContainer = document.getElementById('submit-container');
+            const previewBox = document.getElementById('preview-box');
+            const bgIcon = document.getElementById('preview-bg-icon');
+            
+            previewContainer.classList.remove('opacity-50', 'pointer-events-none');
+            submitContainer.classList.remove('opacity-0', 'translate-y-4', 'pointer-events-none');
+            submitContainer.classList.add('opacity-100', 'translate-y-0');
+
+            previewBox.className = `flex flex-col items-center justify-center p-4 rounded-2xl h-36 border-[3px] transition-all duration-300 relative overflow-hidden ${selectedCategory.bgClass} ${selectedCategory.borderClass}`;
+            
+            const emotionData = emotionsMap[selectedCategory.id][selectedLevel];
+            
+            document.getElementById('preview-category-name').innerText = selectedCategory.name;
+            document.getElementById('preview-category-name').className = `text-[11px] font-bold mb-1 z-10 ${selectedCategory.textClass}`;
+            
+            document.getElementById('preview-emotion-name').innerText = emotionData.name;
+            document.getElementById('preview-emotion-name').className = `text-2xl sm:text-3xl font-black text-center z-10 tracking-wide ${selectedCategory.textClass}`;
+            
+            document.getElementById('preview-sub-name').innerText = emotionData.sub;
+            document.getElementById('preview-sub-name').className = `text-[11px] sm:text-xs font-bold mt-2 z-10 opacity-80 ${selectedCategory.textClass}`;
+
+            bgIcon.className = `fa-solid ${selectedCategory.icon} text-7xl absolute -right-2 -bottom-4 opacity-20 z-0 ${selectedCategory.textClass}`;
+        }
+
+        // 記録の送信 (GASのURLに送信する処理)
+        window.submitEmotion = async function() {
+            if (!GAS_URL || GAS_URL === 'YOUR_WEB_APP_URL') {
+                showCustomError("通信の準備ができていません。GASのURLを設定してください。");
+                return;
+            }
+            if (isSubmitting || !selectedCategory) return;
+            
+            isSubmitting = true;
+            const submitBtn = document.getElementById('submit-btn');
+            submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 記録中...';
+            
+            const emotionData = emotionsMap[selectedCategory.id][selectedLevel];
+
+            // GASへ送るデータ
+            const postData = {
+                categoryId: selectedCategory.id,
+                categoryName: selectedCategory.name,
+                color: selectedCategory.color,
+                level: selectedLevel,
+                emotionName: emotionData.name,
+                emotionSub: emotionData.sub,
+                date: getTodayString()
+            };
+
+            try {
+                // Fetch APIを使ってGASへPOST送信
+                // ★修正: CORSエラーを回避するためのオプションを追加
+                await fetch(GAS_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'text/plain', // GASでは application/json より text/plain の方がCORSエラーを回避しやすい
+                    },
+                    body: JSON.stringify(postData),
+                    mode: 'no-cors' // ★重要: これを追加
+                });
+                
+                // no-cors の場合、正常かどうかのステータスが読めないため、
+                // エラーが発生せずにここまで来たら成功とみなす
+                document.getElementById('success-message').classList.remove('hide');
+                document.getElementById('error-message').classList.add('hide');
+                submitBtn.innerHTML = '<i class="fa-solid fa-check"></i> 記録完了';
+                
+                // 記録完了後に最新のグラフデータを取得しなおす
+                setTimeout(() => {
+                     fetchEmotions();
+                }, 1000); // GASの書き込みラグを考慮して少し遅らせる
+                
+                setTimeout(() => {
+                    submitBtn.innerHTML = '<i class="fa-solid fa-check"></i> このキモチを記録する';
+                    document.getElementById('success-message').classList.add('hide');
+                }, 3000);
+                
+            } catch (error) {
+                console.error("Fetch error: ", error);
+                showCustomError("記録に失敗しました。時間をおいて試してね。");
+                submitBtn.innerHTML = '<i class="fa-solid fa-check"></i> このキモチを記録する';
+            } finally {
+                isSubmitting = false;
+            }
+        };
+
+        // グラフの初期化
+        function initCharts() {
+            Chart.defaults.font.family = "'Noto Sans JP', sans-serif";
+            Chart.defaults.color = '#6b7280'; // gray-500
+
+            // 円グラフ (8カテゴリ)
+            const pieCtx = document.getElementById('pieChart').getContext('2d');
+            pieChartInstance = new Chart(pieCtx, {
+                type: 'doughnut',
+                data: { labels: [], datasets: [{ data: [], backgroundColor: [], borderWidth: 2, borderColor: '#fff' }] },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'right', labels: { boxWidth: 12, padding: 10, font: { size: 10, weight: 'bold' } } },
+                        tooltip: { callbacks: { label: c => ` ${c.label}: ${c.parsed}件` } }
+                    },
+                    cutout: '60%'
+                }
+            });
+
+            // 棒グラフ (24感情)
+            const barCtx = document.getElementById('barChart').getContext('2d');
+            barChartInstance = new Chart(barCtx, {
+                type: 'bar',
+                data: { labels: [], datasets: [{ label: '記録数', data: [], backgroundColor: [], borderRadius: 4 }] },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { beginAtZero: true, ticks: { stepSize: 1, font: { size: 10 } }, grid: { color: '#f3f4f6' } },
+                        x: { ticks: { font: { size: 9, weight: 'bold' }, maxRotation: 45, minRotation: 45 }, grid: { display: false } }
+                    }
+                }
+            });
+        }
+
+        // データの取得 (GASから最新データを読み込む)
+        async function fetchEmotions() {
+            if (GAS_URL === 'YOUR_WEB_APP_URL') return;
+            try {
+                updateStatus("データ同期中...", "bg-yellow-400");
+                
+                // GETリクエストでスプレッドシートのデータを取得
+                // ★修正: キャッシュ対策とリダイレクト追従の明示
+                const response = await fetch(GAS_URL + "?timestamp=" + new Date().getTime(), {
+                    redirect: "follow"
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                allEmotionsData = await response.json();
+                
+                processChartData();
+                updateStatus("オンライン", "bg-green-500");
+            } catch (error) {
+                console.error("Fetch error: ", error);
+                updateStatus("データ同期エラー", "bg-red-500");
+            }
+        }
+
+        // データ集計
+        function processChartData() {
+            // メモリ上で日付フィルタリング
+            const targetData = allEmotionsData.filter(d => d.date === selectedDate);
+            
+            // 円グラフ用集計 (8カテゴリ)
+            const catCounts = {};
+            emotionCategories.forEach(c => catCounts[c.id] = 0);
+            
+            // 棒グラフ用集計 (24種)
+            const emoCounts = {};
+            
+            let total = 0;
+            targetData.forEach(data => {
+                if (catCounts.hasOwnProperty(data.categoryId)) {
+                    catCounts[data.categoryId]++;
+                }
+                
+                const key = `${data.categoryId}_${data.level}`;
+                if (!emoCounts[key]) {
+                    emoCounts[key] = { count: 0, name: data.emotionName, color: data.color };
+                }
+                emoCounts[key].count++;
+                
+                total++;
+            });
+
+            updateCharts(catCounts, emoCounts, total);
+        }
+
+        // グラフ描画更新
+        function updateCharts(catCounts, emoCounts, total) {
+            const noDataMsg = document.getElementById('no-data-msg');
+            
+            if (total === 0) {
+                noDataMsg.classList.remove('hide');
+                pieChartInstance.data.labels = [];
+                pieChartInstance.data.datasets[0].data = [];
+                barChartInstance.data.labels = [];
+                barChartInstance.data.datasets[0].data = [];
+            } else {
+                noDataMsg.classList.add('hide');
+                
+                // 円グラフ: 8カテゴリの割合
+                const pieData = emotionCategories
+                    .map(c => ({ label: c.name, count: catCounts[c.id], color: c.color }))
+                    .filter(item => item.count > 0);
+
+                pieChartInstance.data.labels = pieData.map(d => d.label);
+                pieChartInstance.data.datasets[0].data = pieData.map(d => d.count);
+                pieChartInstance.data.datasets[0].backgroundColor = pieData.map(d => d.color);
+                
+                // 棒グラフ: 全24感情を多い順に並べる
+                const barData = Object.values(emoCounts)
+                    .filter(item => item.count > 0)
+                    .sort((a, b) => b.count - a.count);
+
+                barChartInstance.data.labels = barData.map(d => d.name);
+                barChartInstance.data.datasets[0].data = barData.map(d => d.count);
+                barChartInstance.data.datasets[0].backgroundColor = barData.map(d => d.color);
+            }
+            
+            pieChartInstance.update();
+            barChartInstance.update();
+        }
+
+        // アプリケーション起動
+        async function startApp() {
+            initRecordUI();
+            initCharts();
+            
+            // URLが初期値のままならエラー表示
+            if (GAS_URL === 'YOUR_WEB_APP_URL') {
+                updateStatus("オフライン (設定を変更してね)", "bg-gray-400");
+                return;
+            }
+
+            // 起動時にデータを取得
+            fetchEmotions();
+        }
+
+        // 「集計を見る」タブを開いたときにもデータを最新にする
+        const originalSwitchView = window.switchView;
+        window.switchView = function(viewName) {
+            originalSwitchView(viewName);
+            if(viewName === 'dashboard') {
+                 fetchEmotions();
+            }
+        };
+
+        // ウィンドウロード時に発火
+        window.addEventListener('DOMContentLoaded', startApp);
+    </script>
+</body>
+</html>
