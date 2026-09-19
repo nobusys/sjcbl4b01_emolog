@@ -185,7 +185,7 @@
 
     <script type="module">
         // ★手順8でコピーした「ウェブアプリのURL」に書き換えてください★
-        const GAS_URL = 'https://script.google.com/macros/s/AKfycbycO39o7SGsHlmOHHj8DamvgxkJqSKTb2vXz1LZKqUIMo62rzDOeHv8w_dfZ00TO7ki/exec';
+        const GAS_URL = 'https://script.google.com/macros/s/AKfycbwnHWit2Q3jtwL3nV0JwHwSa-RHASL5Dr4wmUNEfTOPoI-A0jnogiVUQSaWhHy7emEb/exec';
 
         /* STREAMING_CHUNK: Defining emotion data (8 Categories * 3 Levels) */
         // プルチックの輪 ＋ Mood Meterにインスパイアされた、分かりやすい感情表現
@@ -489,22 +489,37 @@
                 updateStatus("データ同期中...", "bg-yellow-400");
                 
                 // GETリクエストでスプレッドシートのデータを取得
-                // ★修正: キャッシュ対策とリダイレクト追従の明示
                 const response = await fetch(GAS_URL + "?timestamp=" + new Date().getTime(), {
                     redirect: "follow"
                 });
                 
                 if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                    throw new Error(`通信エラー (ステータス: ${response.status})`);
                 }
                 
-                allEmotionsData = await response.json();
+                // テキストとして読み込んでからJSONにする（エラーの詳細を把握するため）
+                const responseText = await response.text();
+                let responseData;
+                try {
+                    responseData = JSON.parse(responseText);
+                } catch (e) {
+                    console.error("サーバーからの応答:", responseText);
+                    throw new Error("GASのURLが間違っているか、アクセス権限が「全員」になっていません。");
+                }
+                
+                // GAS側でエラーが返されている場合
+                if (responseData && responseData.error) {
+                    throw new Error(responseData.error);
+                }
+                
+                allEmotionsData = responseData;
                 
                 processChartData();
                 updateStatus("オンライン", "bg-green-500");
             } catch (error) {
                 console.error("Fetch error: ", error);
                 updateStatus("データ同期エラー", "bg-red-500");
+                showCustomError(error.message); // エラーの理由を画面に表示
             }
         }
 
