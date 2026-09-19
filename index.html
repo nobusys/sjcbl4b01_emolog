@@ -504,7 +504,7 @@
                     responseData = JSON.parse(responseText);
                 } catch (e) {
                     console.error("サーバーからの応答:", responseText);
-                    throw new Error("GASのURLが間違っているか、アクセス権限が「全員」になっていません。");
+                    throw new Error("GASの公開設定が間違っています。「実行するユーザー」を「自分」にしてください。");
                 }
                 
                 // GAS側でエラーが返されている場合
@@ -525,8 +525,13 @@
 
         // データ集計
         function processChartData() {
-            // メモリ上で日付フィルタリング
-            const targetData = allEmotionsData.filter(d => d.date === selectedDate);
+            // メモリ上で日付フィルタリング (スプレッドシートの自動日付変換対策を含む)
+            const targetData = allEmotionsData.filter(d => {
+                if (!d || !d.date) return false;
+                // "2026-09-19T15:00:00.000Z" のような形式で返ってきても、先頭10文字で判定できるようにする
+                const recordDateStr = String(d.date).substring(0, 10);
+                return recordDateStr === selectedDate;
+            });
             
             // 円グラフ用集計 (8カテゴリ)
             const catCounts = {};
